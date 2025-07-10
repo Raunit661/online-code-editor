@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Code Editor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1e1e1e;
+            --secondary: #252526;
+            --accent: #007acc;
+            --text-primary: #e0e0e0;
+            --text-secondary: #858585;
+            --success: #4CAF50;
+            --error: #F44336;
+            --border-radius: 4px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--primary);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background-color: var(--secondary);
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #333;
+        }
+
+        .logo {
+            font-weight: 600;
+            font-size: 1.2rem;
+            color: var(--accent);
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        select, button {
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius);
+            border: none;
+            font-family: inherit;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        select {
+            background-color: var(--secondary);
+            color: var(--text-primary);
+            border: 1px solid #333;
+            min-width: 150px;
+        }
+
+        button {
+            background-color: var(--accent);
+            color: white;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0062a3;
+        }
+
+        button:disabled {
+            background-color: var(--text-secondary);
+            cursor: not-allowed;
+        }
+
+        #editor {
+            flex: 1;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            border: 1px solid #333;
+        }
+
+        .output-container {
+            flex: 0 0 30%;
+            background-color: var(--secondary);
+            padding: 1rem;
+            overflow-y: auto;
+            border-left: 1px solid #333;
+        }
+
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .output-title {
+            font-weight: 500;
+        }
+
+        .clear-btn {
+            background-color: transparent;
+            color: var(--text-secondary);
+            padding: 0;
+        }
+
+        .clear-btn:hover {
+            color: var(--text-primary);
+        }
+
+        #output {
+            font-family: 'Fira Code', monospace;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+
+        .success {
+            color: var(--success);
+        }
+
+        .error {
+            color: var(--error);
+        }
+
+        .status {
+            margin-left: auto;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+        }
+
+        .spinner {
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top: 2px solid var(--accent);
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+            display: none;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        footer {
+            padding: 0.5rem;
+            background-color: var(--secondary);
+            font-size: 0.8rem;
+            text-align: center;
+            color: var(--text-secondary);
+            border-top: 1px solid #333;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .output-container {
+                flex: 0 0 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">CodeCraft</div>
+        <div class="status">
+            <div class="spinner" id="spinner"></div>
+            <span id="status-text">Ready</span>
+        </div>
+    </header>
+    <div class="container">
+        <div class="editor-container">
+            <div class="controls">
+                <select id="language">
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="csharp">C#</option>
+                    <option value="php">PHP</option>
+                    <option value="c">C</option>
+                </select>
+                <button id="run-btn">Run Code</button>
+            </div>
+            <div id="editor"></div>
+        </div>
+        <div class="output-container">
+            <div class="output-header">
+                <div class="output-title">Output</div>
+                <button class="clear-btn" id="clear-btn">Clear</button>
+            </div>
+            <div id="output"></div>
+        </div>
+    </div>
+    <footer>
+        Online Code Editor | MIT License | © 2023 CodeCraft
+    </footer>
+
+    <script>
+        // Initialize Monaco Editor
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            // Editor setup
+            const editor = monaco.editor.create(document.getElementById('editor'), {
+                value: `// Welcome to CodeCraft!\n// Write your code here and click Run.\n\nfunction helloWorld() {\n  console.log("Hello, world!");\n  return "This message is from the function";\n}\n\nhelloWorld();`,
+                language: 'javascript',
+                theme: 'vs-dark',
+                automaticLayout: true,
+                minimap: {
+                    enabled: true
+                },
+                scrollBeyondLastLine: false,
+                fontSize: 14,
+                fontFamily: "'Fira Code', monospace",
+                lineNumbers: 'on',
+                roundedSelection: true,
+                scrollbar: {
+                    vertical: 'auto',
+                    horizontal: 'auto'
+                },
+                wordWrap: 'on'
+            });
+
+            // Set default language
+            const languageSelect = document.getElementById('language');
+            languageSelect.addEventListener('change', function() {
+                const language = this.value;
+                monaco.editor.setModelLanguage(editor.getModel(), language);
+                
+                // Set default code for each language
+                let defaultCode = '';
+                switch(language) {
+                    case 'javascript':
+                        defaultCode = `// JavaScript example\nfunction helloWorld() {\n  console.log("Hello, world!");\n  return "This message is from JavaScript";\n}\n\nhelloWorld();`;
+                        break;
+                    case 'python':
+                        defaultCode = `# Python example\ndef hello_world():\n    print("Hello, world!")\n    return "This message is from Python"\n\nhello_world()`;
+                        break;
+                    case 'java':
+                        defaultCode = `// Java example\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, world!");\n        String message = "This message is from Java";\n        System.out.println(message);\n    }\n}`;
+                        break;
+                    case 'csharp':
+                        defaultCode = `// C# example\nusing System;\n\nclass Program {\n    static void Main() {\n        Console.WriteLine("Hello, world!");\n        string message = "This message is from C#";\n        Console.WriteLine(message);\n    }\n}`;
+                        break;
+                    case 'php':
+                        defaultCode = `<?php\n// PHP example\nfunction helloWorld() {\n    echo "Hello, world!\\n";\n    return "This message is from PHP";\n}\n\n$message = helloWorld();\necho $message . "\\n";\n?>`;
+                        break;
+                    case 'c':
+                        defaultCode = `// C example\n#include <stdio.h>\n\nint main() {\n    printf("Hello, world!\\n");\n    char *message = "This message is from C";\n    printf("%s\\n", message);\n    return 0;\n}`;
+                        break;
+                }
+                
+                editor.setValue(defaultCode);
+            });
+
+            // Run button functionality
+            const runBtn = document.getElementById('run-btn');
+            const output = document.getElementById('output');
+            const statusText = document.getElementById('status-text');
+            const spinner = document.getElementById('spinner');
+            
+            runBtn.addEventListener('click', async function() {
+                const code = editor.getValue();
+                const language = languageSelect.value;
+                
+                // Show loading state
+                runBtn.disabled = true;
+                spinner.style.display = 'block';
+                statusText.textContent = 'Running...';
+                
+                try {
+                    // Simulate a backend API call (in a real app, this would be a fetch to your backend)
+                    const result = await simulateBackendExecution(code, language);
+                    
+                    // Display the output
+                    output.innerHTML += `<div class="output-message"><span class="success">✓ Execution successful</span><br>${escapeHtml(result.output)}</div><br>`;
+                    
+                    statusText.textContent = 'Execution completed';
+                    spinner.style.display = 'none';
+                } catch (error) {
+                    output.innerHTML += `<div class="output-message"><span class="error">✗ Execution failed</span><br>${escapeHtml(error.message)}</div><br>`;
+                    
+                    statusText.textContent = 'Execution failed';
+                    spinner.style.display = 'none';
+                }
+                
+                runBtn.disabled = false;
+                
+                // Scroll to bottom of output
+                output.scrollTop = output.scrollHeight;
+            });
+
+            // Clear output button
+            const clearBtn = document.getElementById('clear-btn');
+            clearBtn.addEventListener('click', function() {
+                output.innerHTML = '';
+            });
+
+            // Helper function to escape HTML
+            function escapeHtml(unsafe) {
+                return unsafe
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/"/g, "&quot;")
+                    .replace(/'/g, "&#039;");
+            }
+
+            // Simulate backend execution for this demo
+            async function simulateBackendExecution(code, language) {
+                return new Promise((resolve, reject) => {
+                    setTimeout(() => {
+                        try {
+                            // For JavaScript, we can actually execute the code in the browser
+                            if (language === 'javascript') {
+                                // Store console.log output
+                                let consoleOutput = '';
+                                const originalConsoleLog = console.log;
+                                console.log = (...args) => {
+                                    consoleOutput += args.join(' ') + '\n';
+                                    originalConsoleLog(...args);
+                                };
+
+                                try {
+                                    // Execute the code
+                                    const result = new Function(`
+                                        ${code}
+                                        return {
+                                            output: (typeof helloWorld === 'function' ? helloWorld() : undefined) || 
+                                                    'Code executed but no return value captured'
+                                        };
+                                    `)();
+                                    
+                                    // If we captured console output, prepend it
+                                    let fullOutput = '';
+                                    if (consoleOutput) {
+                                        fullOutput += `Console output:\n${consoleOutput}\n`;
+                                    }
+                                    fullOutput += `Return value:\n${result.output}`;
+                                    
+                                    console.log = originalConsoleLog;
+                                    resolve({ output: fullOutput });
+                                } catch (e) {
+                                    console.log = originalConsoleLog;
+                                    throw e;
+                                }
+                            } else {
+                                // For other languages, just simulate execution
+                                resolve({ 
+                                    output: `Simulated execution of ${language} code.\n\nCode:\n\n${code}\n\n[In a real implementation, this would be executed on a server]` 
+                                });
+                            }
+                        } catch (error) {
+                            reject(error);
+                        }
+                    }, 1000); // Simulate network delay
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+<!-- This code creates a simple online code editor using Monaco Editor. It supports multiple languages and simulates code execution. -->
+<!-- The editor allows users to write code, run it, and see the output in a separate panel. The UI is styled with CSS variables for easy customization. -->
+<!-- The code includes a header, editor area, output area, and footer. It also handles language selection and code execution simulation. -->
+<!-- The output area displays success or error messages based on the execution result. -->
+<!-- The code is structured to be responsive and user-friendly, with clear controls for running and clearing code. -->
+<!-- The editor uses Fira Code font for better readability of code, and Inter font for the UI elements. -->
+<!-- The Monaco Editor is loaded from a CDN, and the code is written in a modular way to keep it organized. -->
+<!-- The editor supports JavaScript, Python, Java, C#, PHP, and C languages with default code examples for each. -->
+<!-- The code is designed to be easily extendable for future features or additional languages. -->
+ 
